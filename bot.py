@@ -61,6 +61,29 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Veuillez envoyer une URL valide.")
         return
 
+    # Vérification des domaines supportés
+    supported_domains = [
+        'youtube.com', 'youtu.be',
+        'vimeo.com',
+        'dailymotion.com',
+        'facebook.com', 'fb.watch',
+        'instagram.com',
+        'tiktok.com'
+    ]
+    
+    if not any(domain in url.lower() for domain in supported_domains):
+        logger.warning(f"Domaine non supporté reçu de l'utilisateur {user_id}: {url}")
+        await update.message.reply_text(
+            "❌ Ce site n'est pas supporté. Les sites supportés sont :\n"
+            "• YouTube\n"
+            "• Vimeo\n"
+            "• Dailymotion\n"
+            "• Facebook\n"
+            "• Instagram\n"
+            "• TikTok"
+        )
+        return
+
     # Message de chargement
     loading_message = await update.message.reply_text("⏳ Téléchargement en cours...")
 
@@ -71,10 +94,21 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Configuration de yt-dlp
             ydl_opts = {
-                'format': 'best',
+                'format': 'best[filesize<50M]',  # Limite la taille à 50MB
                 'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
                 'quiet': True,
                 'no_warnings': True,
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+                'postprocessor_args': [
+                    '-c:v', 'libx264',
+                    '-crf', '28',  # Compression plus agressive
+                    '-preset', 'ultrafast',
+                    '-c:a', 'aac',
+                    '-b:a', '128k'
+                ],
             }
 
             # Téléchargement de la vidéo
@@ -86,6 +120,13 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Envoi de la vidéo
             logger.info(f"Envoi de la vidéo à l'utilisateur {user_id}")
+            
+            # Vérification de la taille du fichier
+            file_size = os.path.getsize(video_path)
+            if file_size > 50 * 1024 * 1024:  # 50MB en bytes
+                await update.message.reply_text("❌ La vidéo est trop grande (plus de 50MB). Veuillez essayer avec une vidéo plus courte.")
+                return
+                
             await update.message.reply_video(
                 video=open(video_path, 'rb'),
                 caption=f"✅ Voici votre vidéo : {info['title']}"
@@ -95,7 +136,19 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Erreur lors du téléchargement pour l'utilisateur {user_id}: {str(e)}")
         logger.exception("Détails de l'erreur :")
-        await update.message.reply_text("❌ Une erreur s'est produite lors du téléchargement. Veuillez réessayer avec un autre lien.")
+        
+        # Message d'erreur plus détaillé
+        error_message = "❌ Une erreur s'est produite lors du téléchargement.\n"
+        if "Video unavailable" in str(e):
+            error_message += "La vidéo n'est pas disponible ou est privée."
+        elif "Sign in" in str(e):
+            error_message += "Cette vidéo nécessite une connexion."
+        elif "filesize" in str(e):
+            error_message += "La vidéo est trop grande (plus de 50MB)."
+        else:
+            error_message += "Veuillez réessayer avec un autre lien."
+            
+        await update.message.reply_text(error_message)
     finally:
         await loading_message.delete()
 
