@@ -10,17 +10,20 @@ import yt_dlp
 # Configuration du logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG,  # Changé en DEBUG pour plus de détails
-    stream=sys.stdout  # Force l'écriture dans stdout pour Heroku
+    level=logging.DEBUG,
+    stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
 
 # Chargement des variables d'environnement
+logger.info("Chargement des variables d'environnement...")
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
-logger.info("Démarrage de l'application...")
+logger.info("=== DÉMARRAGE DE L'APPLICATION ===")
 logger.info(f"Token trouvé : {'Oui' if TOKEN else 'Non'}")
+if TOKEN:
+    logger.info(f"Token (premiers caractères) : {TOKEN[:10]}...")
 
 if not TOKEN:
     logger.error("Token Telegram non trouvé ! Vérifiez votre fichier .env ou les variables d'environnement Heroku.")
@@ -28,8 +31,12 @@ if not TOKEN:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /start"""
-    logger.info(f"Commande /start reçue de {update.effective_user.id}")
+    logger.info("=== COMMANDE START RECUE ===")
+    logger.info(f"Utilisateur : {update.effective_user.id}")
+    logger.info(f"Message : {update.message.text}")
+    
     try:
+        logger.info("Envoi du message de bienvenue...")
         await update.message.reply_text(
             "👋 Bonjour ! Je suis un bot qui peut télécharger des vidéos.\n"
             "Envoyez-moi un lien de vidéo et je la téléchargerai pour vous."
@@ -37,13 +44,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("Message de bienvenue envoyé avec succès")
     except Exception as e:
         logger.error(f"Erreur lors de la commande start : {str(e)}")
+        logger.exception("Détails de l'erreur :")
         await update.message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Télécharge et envoie la vidéo"""
     user_id = update.effective_user.id
     url = update.message.text
-    logger.info(f"Tentative de téléchargement de {url} par l'utilisateur {user_id}")
+    logger.info(f"=== TENTATIVE DE TÉLÉCHARGEMENT ===")
+    logger.info(f"Utilisateur : {user_id}")
+    logger.info(f"URL : {url}")
     
     # Vérification que c'est bien une URL
     if not url.startswith(('http://', 'https://')):
@@ -84,21 +94,23 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logger.error(f"Erreur lors du téléchargement pour l'utilisateur {user_id}: {str(e)}")
+        logger.exception("Détails de l'erreur :")
         await update.message.reply_text("❌ Une erreur s'est produite lors du téléchargement. Veuillez réessayer avec un autre lien.")
     finally:
         await loading_message.delete()
 
 def main():
     """Fonction principale"""
-    logger.info("Démarrage du bot...")
-    logger.info(f"Token utilisé : {TOKEN[:10]}...")  # Affiche seulement le début du token pour la sécurité
+    logger.info("=== DÉMARRAGE DU BOT ===")
     
     try:
         # Création de l'application
+        logger.info("Création de l'application...")
         application = Application.builder().token(TOKEN).build()
         logger.info("Application créée avec succès")
 
         # Ajout des handlers
+        logger.info("Ajout des handlers...")
         application.add_handler(CommandHandler("start", start))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_video))
         logger.info("Handlers ajoutés avec succès")
@@ -108,6 +120,7 @@ def main():
         application.run_polling(allowed_updates=Update.ALL_TYPES)
     except Exception as e:
         logger.error(f"Erreur lors du démarrage du bot : {str(e)}")
+        logger.exception("Détails de l'erreur :")
         raise
 
 if __name__ == '__main__':
