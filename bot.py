@@ -1,6 +1,7 @@
 import os
 import logging
 import tempfile
+import sys
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -9,13 +10,17 @@ import yt_dlp
 # Configuration du logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.DEBUG,  # Changé en DEBUG pour plus de détails
+    stream=sys.stdout  # Force l'écriture dans stdout pour Heroku
 )
 logger = logging.getLogger(__name__)
 
 # Chargement des variables d'environnement
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
+
+logger.info("Démarrage de l'application...")
+logger.info(f"Token trouvé : {'Oui' if TOKEN else 'Non'}")
 
 if not TOKEN:
     logger.error("Token Telegram non trouvé ! Vérifiez votre fichier .env ou les variables d'environnement Heroku.")
@@ -29,6 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👋 Bonjour ! Je suis un bot qui peut télécharger des vidéos.\n"
             "Envoyez-moi un lien de vidéo et je la téléchargerai pour vous."
         )
+        logger.info("Message de bienvenue envoyé avec succès")
     except Exception as e:
         logger.error(f"Erreur lors de la commande start : {str(e)}")
         await update.message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
@@ -51,6 +57,8 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Création d'un dossier temporaire
         with tempfile.TemporaryDirectory() as temp_dir:
+            logger.info(f"Dossier temporaire créé : {temp_dir}")
+            
             # Configuration de yt-dlp
             ydl_opts = {
                 'format': 'best',
@@ -83,6 +91,7 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """Fonction principale"""
     logger.info("Démarrage du bot...")
+    logger.info(f"Token utilisé : {TOKEN[:10]}...")  # Affiche seulement le début du token pour la sécurité
     
     try:
         # Création de l'application
