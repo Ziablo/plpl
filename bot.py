@@ -112,6 +112,9 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'verbose': True,  # Ajout de logs détaillés
                 'extract_flat': False,
                 'ignoreerrors': False,
+                # Ajout des cookies pour les sites nécessitant une connexion
+                'cookiesfrombrowser': ('chrome',),  # Utilise les cookies de Chrome
+                'cookiefile': 'cookies.txt',  # Fichier de cookies alternatif
             }
 
             # Téléchargement de la vidéo
