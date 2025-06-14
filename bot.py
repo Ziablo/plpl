@@ -109,28 +109,52 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     '-c:a', 'aac',
                     '-b:a', '128k'
                 ],
+                'verbose': True,  # Ajout de logs détaillés
+                'extract_flat': False,
+                'ignoreerrors': False,
             }
 
             # Téléchargement de la vidéo
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            try:
                 logger.info(f"Début du téléchargement pour {url}")
-                info = ydl.extract_info(url, download=True)
-                video_path = os.path.join(temp_dir, f"{info['title']}.{info['ext']}")
-                logger.info(f"Vidéo téléchargée : {video_path}")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    logger.info("Extraction des informations de la vidéo...")
+                    info = ydl.extract_info(url, download=True)
+                    if not info:
+                        raise Exception("Impossible d'extraire les informations de la vidéo")
+                    
+                    logger.info(f"Informations extraites : {info.get('title', 'Titre inconnu')}")
+                    video_path = os.path.join(temp_dir, f"{info['title']}.{info['ext']}")
+                    logger.info(f"Chemin de la vidéo : {video_path}")
+                    
+                    if not os.path.exists(video_path):
+                        raise Exception(f"Le fichier n'a pas été créé : {video_path}")
+                    
+                    logger.info(f"Taille du fichier : {os.path.getsize(video_path)} bytes")
+            except Exception as e:
+                logger.error(f"Erreur lors de l'extraction/téléchargement : {str(e)}")
+                raise
 
             # Vérification de la taille du fichier
             file_size = os.path.getsize(video_path)
+            logger.info(f"Taille finale du fichier : {file_size} bytes")
             if file_size > 50 * 1024 * 1024:  # 50MB en bytes
                 await update.message.reply_text("❌ La vidéo est trop grande (plus de 50MB). Veuillez essayer avec une vidéo plus courte.")
                 return
 
             # Envoi de la vidéo
-            logger.info(f"Envoi de la vidéo à l'utilisateur {user_id}")
-            await update.message.reply_video(
-                video=open(video_path, 'rb'),
-                caption=f"✅ Voici votre vidéo : {info['title']}"
-            )
-            logger.info(f"Vidéo envoyée avec succès à l'utilisateur {user_id}")
+            try:
+                logger.info(f"Préparation de l'envoi de la vidéo à l'utilisateur {user_id}")
+                with open(video_path, 'rb') as video_file:
+                    logger.info("Fichier ouvert avec succès")
+                    await update.message.reply_video(
+                        video=video_file,
+                        caption=f"✅ Voici votre vidéo : {info['title']}"
+                    )
+                logger.info(f"Vidéo envoyée avec succès à l'utilisateur {user_id}")
+            except Exception as e:
+                logger.error(f"Erreur lors de l'envoi de la vidéo : {str(e)}")
+                raise
 
     except Exception as e:
         logger.error(f"Erreur lors du téléchargement pour l'utilisateur {user_id}: {str(e)}")
@@ -144,8 +168,12 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_message += "Cette vidéo nécessite une connexion."
         elif "filesize" in str(e):
             error_message += "La vidéo est trop grande (plus de 50MB)."
+        elif "Unable to download webpage" in str(e):
+            error_message += "Impossible d'accéder à la vidéo. Vérifiez que l'URL est correcte."
+        elif "This video is unavailable" in str(e):
+            error_message += "Cette vidéo n'est pas disponible dans votre pays ou a été supprimée."
         else:
-            error_message += "Veuillez réessayer avec un autre lien."
+            error_message += f"Erreur technique : {str(e)}"
             
         await update.message.reply_text(error_message)
     finally:
