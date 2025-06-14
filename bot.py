@@ -112,10 +112,22 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'verbose': True,  # Ajout de logs détaillés
                 'extract_flat': False,
                 'ignoreerrors': False,
-                # Ajout des cookies pour les sites nécessitant une connexion
-                'cookiesfrombrowser': ('chrome',),  # Utilise les cookies de Chrome
-                'cookiefile': 'cookies.txt',  # Fichier de cookies alternatif
+                # Configuration des cookies
+                'cookiefile': 'cookies.txt',  # Fichier de cookies
+                'cookiesfrombrowser': None,  # Désactive la récupération des cookies du navigateur
             }
+
+            # Vérification de l'existence du fichier de cookies
+            if not os.path.exists('cookies.txt'):
+                logger.warning("Fichier de cookies non trouvé")
+                await update.message.reply_text(
+                    "⚠️ Cette vidéo nécessite une connexion.\n"
+                    "Pour télécharger des vidéos privées, vous devez d'abord :\n"
+                    "1. Vous connecter au site dans votre navigateur\n"
+                    "2. Exporter les cookies avec l'extension 'Get cookies.txt'\n"
+                    "3. Envoyer le fichier cookies.txt au bot"
+                )
+                return
 
             # Téléchargement de la vidéo
             try:
@@ -182,6 +194,25 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         await loading_message.delete()
 
+async def handle_cookies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère l'envoi du fichier de cookies"""
+    if not update.message.document:
+        await update.message.reply_text("❌ Veuillez envoyer un fichier cookies.txt")
+        return
+
+    if update.message.document.file_name != "cookies.txt":
+        await update.message.reply_text("❌ Le fichier doit s'appeler 'cookies.txt'")
+        return
+
+    try:
+        # Téléchargement du fichier
+        file = await context.bot.get_file(update.message.document.file_id)
+        await file.download_to_drive("cookies.txt")
+        await update.message.reply_text("✅ Fichier de cookies reçu avec succès ! Vous pouvez maintenant télécharger des vidéos privées.")
+    except Exception as e:
+        logger.error(f"Erreur lors de la réception du fichier de cookies : {str(e)}")
+        await update.message.reply_text("❌ Une erreur s'est produite lors de la réception du fichier de cookies.")
+
 def main():
     """Fonction principale"""
     logger.info("=== DÉMARRAGE DU BOT ===")
@@ -196,6 +227,7 @@ def main():
         logger.info("Ajout des handlers...")
         application.add_handler(CommandHandler("start", start))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_video))
+        application.add_handler(MessageHandler(filters.Document.ALL, handle_cookies))
         logger.info("Handlers ajoutés avec succès")
 
         # Démarrage du bot
